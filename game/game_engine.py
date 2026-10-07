@@ -3,6 +3,47 @@ import pygame
 from game.block import Block
 
 
+class Debris:
+    """A trimmed block section that falls and rotates after a cut."""
+
+    def __init__(self, x, y, width, height, color, velocity_x, rotation_speed):
+        self.x = float(x)
+        self.y = float(y)
+        self.width = float(width)
+        self.height = float(height)
+        self.color = color
+        self.velocity_x = float(velocity_x)
+        self.velocity_y = -1.5
+        self.rotation = 0.0
+        self.rotation_speed = float(rotation_speed)
+        self.gravity = 0.45
+        self.life = 90
+
+    def update(self):
+        self.velocity_y += self.gravity
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+        self.rotation += self.rotation_speed
+        self.life -= 1
+
+    def render(self, surface):
+        width = max(2, int(self.width))
+        height = max(2, int(self.height))
+        debris_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.rect(debris_surface, self.color, debris_surface.get_rect(), border_radius=4)
+        pygame.draw.rect(
+            debris_surface,
+            (245, 245, 250),
+            debris_surface.get_rect(),
+            width=2,
+            border_radius=4,
+        )
+
+        rotated = pygame.transform.rotate(debris_surface, self.rotation)
+        rect = rotated.get_rect(center=(int(self.x + self.width / 2), int(self.y + self.height / 2)))
+        surface.blit(rotated, rect)
+
+
 class GameEngine:
     def __init__(self, width, height):
         self.width = width
@@ -46,6 +87,7 @@ class GameEngine:
         base_y = self.height - 60
         base_block = Block(base_x, base_y, self.base_width, self.block_height, self.get_color(0), speed=0)
         self.stack = [base_block]
+        self.debris = []
 
         self.spawn_active_block()
 
@@ -57,6 +99,24 @@ class GameEngine:
 
         start_x = 25 if random.choice([True, False]) else self.width - 25 - top_block.width
         self.active_block = Block(start_x, next_y, top_block.width, self.block_height, color, speed=speed)
+
+    def create_debris(self, x, y, width, color, direction):
+        if width <= 0:
+            return
+
+        velocity_x = 1.2 * direction
+        rotation_speed = 5.0 * direction
+        self.debris.append(
+            Debris(
+                x,
+                y,
+                width,
+                self.block_height,
+                color,
+                velocity_x,
+                rotation_speed,
+            )
+        )
 
     def drop_block(self):
         if self.game_over:
@@ -110,6 +170,15 @@ class GameEngine:
                         new_block.width = restored_width
                         new_block.x -= width_gain / 2
             else:
+                # Task 3: animate the sections cut away from the active block.
+                left_offcut = left - act.x
+                right_offcut = (act.x + act.width) - right
+
+                if left_offcut > 0:
+                    self.create_debris(act.x, act.y, left_offcut, act.color, -1)
+                if right_offcut > 0:
+                    self.create_debris(right, act.y, right_offcut, act.color, 1)
+
                 trimmed_width = max(10.0, overlap)
                 new_block = Block(
                     left,
@@ -153,6 +222,14 @@ class GameEngine:
         if self.perfect_message_timer > 0:
             self.perfect_message_timer -= 1
 
+        for debris in self.debris:
+            debris.update()
+        self.debris = [
+            debris
+            for debris in self.debris
+            if debris.life > 0 and debris.y < self.height + 60
+        ]
+
     def render(self, screen):
         screen.fill((24, 27, 36))
 
@@ -161,6 +238,9 @@ class GameEngine:
 
         score_surf = self.font_hud.render(f"Height: {self.score}", True, (255, 220, 80))
         screen.blit(score_surf, (self.width // 2 - score_surf.get_width() // 2, 54))
+
+        for debris in self.debris:
+            debris.render(screen)
 
         for b in self.stack:
             b.render(screen)
