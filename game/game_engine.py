@@ -230,8 +230,49 @@ class GameEngine:
             if debris.life > 0 and debris.y < self.height + 60
         ]
 
+    def get_atmospheric_colors(self):
+        """Return top/bottom sky colors based on the current tower height."""
+        # Use actual stack height rather than score so perfect-placement bonuses
+        # do not make the sky advance faster than the tower.
+        height = max(0, len(self.stack) - 1)
+
+        # Gradually move through atmospheric stages as the tower climbs.
+        stages = [
+            ((24, 27, 36), (58, 72, 105)),    # ground: night blue
+            ((34, 43, 78), (98, 74, 128)),    # lower climb: violet
+            ((62, 47, 105), (170, 92, 125)),  # mid climb: dusk
+            ((96, 62, 104), (222, 139, 105)), # high climb: warm horizon
+            ((54, 76, 118), (165, 196, 220)), # upper climb: pale atmosphere
+        ]
+
+        stage_position = min(height / 6.0, len(stages) - 1)
+        stage_index = min(int(stage_position), len(stages) - 2)
+        fraction = stage_position - stage_index
+
+        top_a, bottom_a = stages[stage_index]
+        top_b, bottom_b = stages[stage_index + 1]
+
+        def blend(a, b, t):
+            return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+        return blend(top_a, top_b, fraction), blend(bottom_a, bottom_b, fraction)
+
+    def draw_atmospheric_background(self, screen):
+        """Draw a vertical sky gradient whose colors change with tower height."""
+        top_color, bottom_color = self.get_atmospheric_colors()
+        max_y = max(1, self.height - 1)
+
+        for y in range(self.height):
+            t = y / max_y
+            color = tuple(
+                int(top_color[i] + (bottom_color[i] - top_color[i]) * t)
+                for i in range(3)
+            )
+            pygame.draw.line(screen, color, (0, y), (self.width, y))
+
     def render(self, screen):
-        screen.fill((24, 27, 36))
+        # Task 4: replace the static sky with a height-driven atmospheric gradient.
+        self.draw_atmospheric_background(screen)
 
         title_surf = self.font_title.render("Skyscraper Stack", True, (245, 245, 245))
         screen.blit(title_surf, (self.width // 2 - title_surf.get_width() // 2, 16))
